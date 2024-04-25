@@ -1,0 +1,247 @@
+---
+title: Web Scraping Exercises
+author: J.L.A. Krusell
+date: today
+execute:
+    eval: false
+format:
+    html:
+        embed-resources: true
+        toc: true
+---
+
+
+## First Steps
+
+We will use [CSS Selectors](https://developer.mozilla.org/en-US/docs/Learn/CSS/Building_blocks/Selectors), a syntax created to apply CSS rules to html elements, to programmatically select the elements that contain the information we want to extract from a web page.[^xpath]
+
+[^xpath]: Another approach often used in web scraping is [XPath](https://en.wikipedia.org/wiki/XPath), which is used to locate elements in XML documents. Since HTML documents are subsets of XML, XPath is equally valid.
+
+Some examples of common CSS selectors are provided in the table below. A full list can be found at [W3](https://www.w3schools.com/cssref/css_selectors.php).
+
+
+| Selector                | Description                                                                                   |
+|-------------------------|-----------------------------------------------------------------------------------------------|
+| *element*               | Select elements by type                                                                       |
+| .*class*                | Select elements by their class attribute                                                      |
+| #*id*                   | Select elements by id                                                                         |
+| *element1* *element2*   | Select elements that are descendants of the first listed element type                         |
+| *element1* > *element2* | Select elements matching *element2* which are direct children of elements matching *element1* |
+| [*attribute*]           | Select elements with a matching attribute                                                     |
+| :nth-child(*number*)    | Select elements based on index position in child list                                                                                              |
+
+CSS selectors can be combined, which makes them particularly powerful and convenient. To see them in action, let's play around with the `example.html` file that is included in this repository.
+
+```html
+<html>
+  <title>Example Page</title>
+  <body>
+    <h1>Introduction</h1>
+    <p class="intro">This is a <em>html</em> page that includes several <a href="https://www.google.com/search?q=web+scraping">links</a></p>
+    <h1>Section 2</h1>
+    <p class="important">Here are several examples of <b>CSS Selectors</b>:</p>
+    <table class="center">
+      <tr id="names">
+        <th>Selector</th>
+        <th>Example</th>
+      </tr>
+      <tr>
+        <td class="row"><em>element</em></td>
+        <td>p</td>
+      </tr>
+      <tr>
+        <td class="row"><em>element</em>[attribute=<em>Value</em>]</td>
+        <td>p[data-label=Candidate]</td>
+      </tr>
+    </table>
+    <div>More examples can be found with <a href="https://www.google.com/search?q=css+selectors">google</a>
+    </div>
+  </body>
+</html>
+```
+
+When working with html we will use the `rvest` package in R which has the functions `html_elements`/`html_element` that allow us to select html elements based on CSS selectors. We start by loading the html page into R using the `read_html` function.
+
+```R
+library(rvest)
+
+# Read in our html file and returning an html object
+html <- read_html("example.html")
+```
+
+Now we can begin selecting elements from our html object using CSS selectors.
+
+```R
+# Let's select all anchor (ie <a></a>) elements and extract their URLs
+anchors <- html_elements(html, "a")
+html_attr(anchors, "href")
+
+# Select only the links that contain the phrase "css"
+html_elements(html, "a[href*=css]") |> html_attr("href")
+
+# Select only links that are descendents of a div tag
+html_elements(html, "div a") |> html_attr("href")
+
+# Select all text that is italicized
+html_elements(html, "em") |> html_text()
+
+# Select elements by class
+html_elements(html, "td.row") |> html_text()
+
+# Select the second column for the row with the id "names"
+html_elements(html, "tr#names > th:nth-child(2)") |> html_text()
+```
+
+## Norwegian Members of Parliament
+
+Let's move on to a real example where we scrape a webpage. We are going to webscrape a list of all current members of the Norwegian parliament, Stortinget, and their affiliated parties.
+
+The current list is available on the official [english language webpage](https://www.stortinget.no/en/In-English/Members-of-the-Storting/current-members-of-parliament/) for the Norwegian parliament.
+
+![](assets/example_no.png)
+
+Start by inspecting the structure of the html webpage through your browser's developer tools. We want to find the html elements that contain the names and party affiliations as well as any identifying attributes or class names that we can use for CSS selection.
+
+In this case it is fairly straight forward. The list is contained within an html `<table>` with the names in the second column and the party affiliation in the third.
+
+```R
+library(rvest)
+
+# This will send an HTTP GET request and load the html content into R
+html <- read_html("https://www.stortinget.no/en/In-English/Members-of-the-Storting/current-members-of-parliament/")
+
+names <- html_elements(html, "tbody td:nth-child(2)") |> html_text()
+parties <- html_elements(html, "tbody td:nth-child(3)") |> html_text()
+
+parliament <- data.frame(name = names, party = parties)
+```
+
+How do we further clean up both the party and MP names in order to make our dataset more presentable?
+
+## Congressional Financial Disclosures
+
+How much personal debt do U.S. Congressional Candidates possess?
+
+We are going to analyze the amount of money owed, *i.e.* personal financial obligations in the form of liabilities, by Congressional candidates. To limit our scope, we will restrict ourselves to only candidates that ran for the 2020 House of Representatives elections in the Great State of Florida.
+
+![](assets/flag.jpg)
+
+We will access this data by webscraping financial disclosure forms. By law all incumbent members of Congress and Congressional candidates must file a [financial disclosure form](https://www.congress.gov/bill/95th-congress/senate-bill/555) listing all sources of earned and unearned income, outstanding liabilities, and other relevant financial information. These forms must be made publicly available [online](https://www.congress.gov/bill/112th-congress/senate-bill/2038).
+
+The disclosure forms filed by current and prospective representatives are available on the [House's Clerk website](https://disclosures-clerk.house.gov/FinancialDisclosure) as PDF files.
+
+![Example extract from the official financial disclosure form for Congressional candidates](assets/example_disclosure.png)
+
+We will break this task up into several steps.
+
+- First, we will extract the official electoral resluts from the 2020 elections in order to narrow our list of candidates. Specifically, we want to exclude write-ins and primary challengers.
+
+- Second, we will programmatically download the PDF disclosure forms for both candidates and incumbent members from Florida for the 2020 election.
+
+- Third, we will read each PDF into R and parse its contents in order to extract each listed liability and aggregate the results at the candidate/member level.
+
+- Finally, we will combine the aggregate results with geospatial data on Florida's Congressional Districts.
+
+Our goal will be to create summary statistics so that we can compare the amount of liabilities by district, by party, and by candidate. We'll also create a map to better visualize the total amount of liabilities per candidate by district.
+
+### Step 1 - Create a list of target candidates
+
+We will create a list of candidate names from the official [2020 election results](https://www.fec.gov/introduction-campaign-finance/election-and-voting-information/federal-elections-2020/) provided by the U.S. Federal Election Comission.
+
+This will give us the party affiliation and district for each candidate, and allow us to filter out primary challengers and write-ins.
+
+```R
+library(dplyr)
+library(readxl)
+
+# These are the official results for the 2020 election
+df <- read_xlsx("./federalelections2020.xlsx", sheet = 13) |>
+    select(State = `STATE ABBREVIATION`, District = DISTRICT,
+           Candidate = `CANDIDATE NAME`, Party = PARTY,
+           Results = `GENERAL %`, Winner = `GE WINNER INDICATOR`)
+
+# Grab only candidates from Florida and ignore write-ins
+florida <- filter(df, State == "FL", !is.na(Candidate), !is.na(Results),
+                  Party != "W") |>
+    mutate(Winner = ifelse(!is.na(Winner) & Winner == "W", "W", "L") |> as.factor())
+
+
+```
+
+
+### Step 2 - Download PDFs
+
+The financial disclosure reports are available [here](https://disclosures-clerk.house.gov/FinancialDisclosure). Start by exploring the webpage with your browser's developer tools.
+
+We will want to first get a list of all candidates as well as the url links to their financial disclosure forms. How can we grab this information and what type of HTTP request should we use? Do we need to download all of the PDF forms listed on the House website?
+
+```R
+library(httr)
+library(rvest)
+
+# We'll store the actual PDF files in the following directory
+dir.create("disclosures", showWarnings = F)
+
+# We can use our previous list to narrow our search
+florida <- readRDS("./florida_house_candidates.rds")
+
+base_url <- "https://disclosures-clerk.house.gov"
+
+# Webscrape the names for each candidate and the corresponding URL for their financial disclosure forms.
+documents <- data.frame()
+
+# For each candidate and FD, download and save the PDF to our local directory
+for (i in 1:nrow(documents)) {
+
+}
+
+saveRDS(documents, "scraped_candidate_list.rds")
+
+```
+
+### Step 3 - Parsing Disclosure Forms
+
+Once we've downloaded all of the disclosure forms as PDF files we'll try to parse the text contents.
+
+Parsing PDFs is often a complicated process. If a PDF is a scan of a document as is often the case when working with archival material, then you will have to use [OCR](https://en.wikipedia.org/wiki/Optical_character_recognition).[^ocr] Luckily for us, however, we do not need OCR as our documents are "native" PDF files for which we will be able to directly extract all text using the `pdftools::pdf_text` function.
+
+[^ocr]: One of the most popular open source libraries for OCR is [tesseract](https://github.com/tesseract-ocr/tesseract) --- `pdftools` includes support for tesseract through the corresponding R package.
+
+Nonetheless, the text we get out will be unstructured and messy. Tools like [tabula](https://tabula.technology/) that automatically extract tables from PDFs can be useful; however, they often require a great deal of manual intervention which is not ideal when we want to parse a large number of documents at once. Alternatively, you can go the machine learning route and use a [Named Entity Recognition](https://en.wikipedia.org/wiki/Named-entity_recognition) model, but that would generally require manually creating a training dataset from your source material.
+
+We will go the low-tech route and use a series of regex and string functions to try to parse our PDFs.
+
+```R
+library(pdftools)
+
+results <- list()
+candidates <- readRDS("./scraped_candidate_list.rds")
+
+# Parse each file and save the results. We will want to extract
+# everything between the Schedule D and Schedule E sections.
+for (pdf in files) {
+    txt <- pdf_text(pdf)
+}
+
+```
+
+
+### Step 4 - A Map!
+
+Finally, we can also merge in the official Congressional district boundaries for the state of Florida. We can grab this from the 2020 version of the [Legislative Areas National Geodatabase](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-geodatabase-file.2020.html#list-tab-1258746043) provided by the U.S. Census Bureau.
+
+```R
+library(mapview)
+library(sf)
+
+# These are the official Congressional districts from the US
+# Census. Florida districts have a GEOID that starts with "12".
+districts <- st_read(dsn = "./districts/tlgdb_2020_a_us_legislative.gdb",
+                     layer = "Current_Congressional_Districts") |>
+    filter(substring(GEOID, 1, 2) == "12") |>
+    mutate(District = substring(GEOID, 3, 4))
+
+# Final dataframe after merging all of our data sources
+final.df <- data.frame()
+mapview(final.df)
+```

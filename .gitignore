@@ -1,0 +1,11 @@
+districts/
+slides_files/
+stortinget/
+
+slides.qmd
+
+*.html
+*.rds
+*.pdf
+
+!example.html

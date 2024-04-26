@@ -28,7 +28,7 @@ Some examples of common CSS selectors are provided in the table below. A full li
 | *element1* *element2*   | Select elements that are descendants of the first listed element type                         |
 | *element1* > *element2* | Select elements matching *element2* which are direct children of elements matching *element1* |
 | [*attribute*]           | Select elements with a matching attribute                                                     |
-| :nth-child(*number*)    | Select elements based on index position in child list                                                                                              |
+| :nth-child(*number*)    | Select elements based on index position in child list                                         |
 
 CSS selectors can be combined, which makes them particularly powerful and convenient. To see them in action, let's play around with the `example.html` file that is included in this repository.
 
@@ -116,7 +116,7 @@ parties <- html_elements(html, "tbody td:nth-child(3)") |> html_text()
 parliament <- data.frame(name = names, party = parties)
 ```
 
-How do we further clean up both the party and MP names in order to make our dataset more presentable?
+How do we further clean up both the party and MP names in order to make our dataset more presentable? Is there any additional data that we would like to webscrape?
 
 ## Congressional Financial Disclosures
 

@@ -62,7 +62,7 @@ CSS selectors can be combined, which makes them particularly powerful and conven
 
 When working with html we will use the `rvest` package in R which has the functions `html_elements`/`html_element` that allow us to select html elements based on CSS selectors. We start by loading the html page into R using the `read_html` function.
 
-```R
+```{R}
 library(rvest)
 
 # Read in our html file and returning an html object
@@ -71,7 +71,7 @@ html <- read_html("example.html")
 
 Now we can begin selecting elements from our html object using CSS selectors.
 
-```R
+```{R}
 # Let's select all anchor (ie <a></a>) elements and extract their URLs
 anchors <- html_elements(html, "a")
 html_attr(anchors, "href")
@@ -104,7 +104,7 @@ Start by inspecting the structure of the html webpage through your browser's dev
 
 In this case it is fairly straight forward. The list is contained within an html `<table>` with the names in the second column and the party affiliation in the third.
 
-```R
+```{R}
 library(rvest)
 
 # This will send an HTTP GET request and load the html content into R
@@ -150,7 +150,7 @@ We will create a list of candidate names from the official [2020 election result
 
 This will give us the party affiliation and district for each candidate, and allow us to filter out primary challengers and write-ins.
 
-```R
+```{R}
 library(dplyr)
 library(readxl)
 
@@ -175,7 +175,7 @@ The financial disclosure reports are available [here](https://disclosures-clerk.
 
 We will want to first get a list of all candidates as well as the url links to their financial disclosure forms. How can we grab this information and what type of HTTP request should we use? Do we need to download all of the PDF forms listed on the House website?
 
-```R
+```{R}
 library(httr)
 library(rvest)
 
@@ -211,7 +211,7 @@ Nonetheless, the text we get out will be unstructured and messy. Tools like [tab
 
 We will go the low-tech route and use a series of regex and string functions to try to parse our PDFs.
 
-```R
+```{R}
 library(pdftools)
 
 results <- list()
@@ -230,7 +230,7 @@ for (pdf in files) {
 
 Finally, we can also merge in the official Congressional district boundaries for the state of Florida. We can grab this from the 2020 version of the [Legislative Areas National Geodatabase](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-geodatabase-file.2020.html#list-tab-1258746043) provided by the U.S. Census Bureau.
 
-```R
+```{R}
 library(mapview)
 library(sf)
 
@@ -286,7 +286,7 @@ To explore how to use an API we'll be scraping data from [Pollenrapporten.se](po
 Their API is completely open and well [documented](https://api.pollenrapporten.se/docs#/default/get_pollen_count_v1_pollen_count_get). We'll start by first getting a list of regions provided in the forecast.
 
 
-```R
+```{R}
 library(httr)
 library(jsonlite)
 
@@ -308,7 +308,7 @@ regions.df <- bind_rows(regions$items)
 
 Now let's fetch the forecasts for each region using the `id` field from the `/v1/regions` endpoint.
 
-```R
+```{R}
 # /v1/forecasts
 resp <- GET(paste0(url, "forecasts"), query = list(current = "true"))
 

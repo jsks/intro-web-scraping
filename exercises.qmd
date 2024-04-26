@@ -245,3 +245,90 @@ districts <- st_read(dsn = "./districts/tlgdb_2020_a_us_legislative.gdb",
 final.df <- data.frame()
 mapview(final.df)
 ```
+
+
+## Pollenrapporten API
+
+So far we have been webscraping data directly from html pages. As an alternative, some web services will offer an API whereby we send a HTTP request to a url endpoint and receive back a structured data object, usually in the form of `json`.
+
+[json](https://www.json.org/json-en.html) is a data format that is fairly ubiquitous on the web. Below is an example json object, which can be read into R using the `jsonlite` package.
+
+```json
+{
+  "items": [
+    {
+      "id": "88ce3e39-88b3-401f-ba1e-791c1fdffbd0",
+      "regionId": "4789c415-7f24-4d8d-9788-f28c6bc0b416",
+      "startDate": "2024-04-26",
+      "endDate": "2024-04-26",
+      "text": "string",
+      "images": [
+        {
+          "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+          "pollenId": "ceedf458-b4fb-4070-b652-b399863c6c83",
+          "url": "https://example.com/"
+        }
+      ],
+      "levelSeries": [
+        {
+          "pollenId": "ceedf458-b4fb-4070-b652-b399863c6c83",
+          "level": 0,
+          "time": "2024-04-26T06:19:34.803Z"
+        }
+      ]
+    }
+  ]
+}
+```
+
+To explore how to use an API we'll be scraping data from [Pollenrapporten.se](pollenrapporten.se) which provides forecasts on pollen levels for each region in Sweden.
+
+Their API is completely open and well [documented](https://api.pollenrapporten.se/docs#/default/get_pollen_count_v1_pollen_count_get). We'll start by first getting a list of regions provided in the forecast.
+
+
+```R
+library(httr)
+library(jsonlite)
+
+url <- "https://api.pollenrapporten.se/v1/"
+
+# /v1/regions endpoint
+resp <- GET(paste0(url, "regions"))
+
+# Always check the status code of the response
+if (resp$status_code != 200)
+    sprintf("HTTP error code: %d", resp$status_code) |> stop()
+
+# Retrieve the json content from the response in the form of an R list
+regions <- content(resp)
+str(regions)
+
+regions.df <- bind_rows(regions$items)
+```
+
+Now let's fetch the forecasts for each region using the `id` field from the `/v1/regions` endpoint.
+
+```R
+# /v1/forecasts
+resp <- GET(paste0(url, "forecasts"), query = list(current = "true"))
+
+if (resp$status$code != 200)
+    sprintf("HTTP error code: %d", resp$status_code) |> stop()
+
+forecast <- content(resp)
+ll <- lapply(forecast$items, function(item) {
+    region <- regions.df$name[regions.df$id == item$regionId]
+    if (is.null(item$levelSeries))
+        return(NULL)
+
+    lapply(item$levelSeries, \(ll) list(pollenId = ll$pollenId,
+                                        level = ll$level,
+                                        time = ll$time)) |>
+        bind_rows() |>
+        mutate(region = region)
+})
+
+df <- bind_rows(ll)
+```
+
+Can we translate the pollen levels using another API endpoint?
